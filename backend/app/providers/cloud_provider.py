@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 OPENROUTER_COMPLETIONS_URL = "https://openrouter.ai/api/v1/chat/completions"
 
-OPENROUTER_FREE_FALLBACK = "deepseek/deepseek-v4-flash-0731:free"
+OPENROUTER_FREE_FALLBACK = "nex-agi/nex-n2.5-mini:free"
 
 class ClaudeProvider(BaseLLMProvider):
     def __init__(self, api_key: str = None, model: str = None):
@@ -38,12 +38,16 @@ class ClaudeProvider(BaseLLMProvider):
             headers = {
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json",
-                "HTTP-Referer": "http://localhost:3000",
+                "HTTP-Referer": "https://frontend-iota-nine-91.vercel.app",
                 "X-Title": "Lenny Growth Assistant"
             }
+            active_model = self.model
+            if "/" not in active_model or active_model in ["claude-3-5-sonnet-20241022", "claude-3-5-sonnet"]:
+                active_model = OPENROUTER_FREE_FALLBACK
+
             openrouter_messages = [{"role": "system", "content": system_prompt}] + messages
             payload = {
-                "model": self.model,
+                "model": active_model,
                 "messages": openrouter_messages,
                 "temperature": temperature,
                 "stream": True
@@ -57,14 +61,15 @@ class ClaudeProvider(BaseLLMProvider):
                         headers=headers,
                         json=payload
                     ) as response:
-                        if response.status_code == 402:
-                            # 402 Insufficient credits -> fallback to free model
-                            logger.info(f"OpenRouter 402 for model {self.model}. Falling back to {OPENROUTER_FREE_FALLBACK}")
-                            yield f"> ℹ️ *Model `{self.model}` requires paid OpenRouter credits. Automatically routed to free model `{OPENROUTER_FREE_FALLBACK}`:*\n\n"
+                        if response.status_code in [400, 402, 404]:
+                            logger.info(f"OpenRouter {response.status_code} for model {active_model}. Falling back to {OPENROUTER_FREE_FALLBACK}")
+                            if active_model != OPENROUTER_FREE_FALLBACK:
+                                yield f"> ℹ️ *Model `{active_model}` routed to free model `{OPENROUTER_FREE_FALLBACK}`:*\n\n"
                             payload["model"] = OPENROUTER_FREE_FALLBACK
                             async with client.stream("POST", OPENROUTER_COMPLETIONS_URL, headers=headers, json=payload) as fallback_resp:
                                 if fallback_resp.status_code != 200:
-                                    yield f"\n[Free fallback model error ({fallback_resp.status_code})]\n"
+                                    err_fb = (await fallback_resp.aread()).decode("utf-8", errors="ignore")
+                                    yield f"\n[Free fallback model error ({fallback_resp.status_code}): {err_fb[:100]}]\n"
                                     return
                                 async for line in fallback_resp.aiter_lines():
                                     if line.startswith("data: "):
@@ -195,11 +200,13 @@ class OpenAIProvider(BaseLLMProvider):
         }
         if is_openrouter:
             headers["HTTP-Referer"] = "http://localhost:3000"
-            headers["X-Title"] = "Lenny Growth Assistant"
+        active_model = self.model
+        if is_openrouter and ("/" not in active_model or active_model in ["gpt-4o", "gpt-4"]):
+            active_model = OPENROUTER_FREE_FALLBACK
 
         openai_messages = [{"role": "system", "content": system_prompt}] + messages
         payload = {
-            "model": self.model,
+            "model": active_model,
             "messages": openai_messages,
             "temperature": temperature,
             "stream": True
@@ -213,14 +220,16 @@ class OpenAIProvider(BaseLLMProvider):
                     headers=headers,
                     json=payload
                 ) as response:
-                    if is_openrouter and response.status_code == 402:
-                        # 402 Insufficient credits -> fallback to free model
-                        logger.info(f"OpenRouter 402 for model {self.model}. Falling back to {OPENROUTER_FREE_FALLBACK}")
-                        yield f"> ℹ️ *Model `{self.model}` requires paid OpenRouter credits. Automatically routed to free model `{OPENROUTER_FREE_FALLBACK}`:*\n\n"
+                    if is_openrouter and response.status_code in [400, 402, 404]:
+                        # 400/402 Insufficient credits or invalid model -> fallback to free model
+                        logger.info(f"OpenRouter {response.status_code} for model {active_model}. Falling back to {OPENROUTER_FREE_FALLBACK}")
+                        if active_model != OPENROUTER_FREE_FALLBACK:
+                            yield f"> ℹ️ *Model `{active_model}` routed to free model `{OPENROUTER_FREE_FALLBACK}`:*\n\n"
                         payload["model"] = OPENROUTER_FREE_FALLBACK
                         async with client.stream("POST", endpoint_url, headers=headers, json=payload) as fallback_resp:
                             if fallback_resp.status_code != 200:
-                                yield f"\n[Free fallback model error ({fallback_resp.status_code})]\n"
+                                err_fb = (await fallback_resp.aread()).decode("utf-8", errors="ignore")
+                                yield f"\n[Free fallback model error ({fallback_resp.status_code}): {err_fb[:100]}]\n"
                                 return
                             async for line in fallback_resp.aiter_lines():
                                 if line.startswith("data: "):

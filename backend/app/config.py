@@ -29,10 +29,12 @@ class Settings(BaseSettings):
     
     # Cloud Providers (Optional)
     ANTHROPIC_API_KEY: Optional[str] = os.getenv("ANTHROPIC_API_KEY", None)
-    ANTHROPIC_MODEL: str = os.getenv("ANTHROPIC_MODEL", "claude-3-5-sonnet-20241022")
+    _default_anthropic_model = "nex-agi/nex-n2.5-mini:free" if (os.getenv("ANTHROPIC_API_KEY", "").startswith("sk-or-")) else "claude-3-5-sonnet-20241022"
+    ANTHROPIC_MODEL: str = os.getenv("ANTHROPIC_MODEL", _default_anthropic_model)
     
     OPENAI_API_KEY: Optional[str] = os.getenv("OPENAI_API_KEY", None)
-    OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4o")
+    _default_openai_model = "nex-agi/nex-n2.5-mini:free" if (os.getenv("OPENAI_API_KEY", "").startswith("sk-or-")) else "gpt-4o"
+    OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", _default_openai_model)
 
     # RAG Settings
     EMBEDDING_DIM: int = 384
