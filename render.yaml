@@ -1,0 +1,49 @@
+services:
+  # ----------------------------------------------------------------------------
+  # 1. FastAPI Backend (Python Web Service)
+  # ----------------------------------------------------------------------------
+  - type: web
+    name: lenny-assistant-api
+    runtime: python
+    region: oregon
+    plan: free
+    rootDir: backend
+    buildCommand: "pip install -r requirements.txt && python scripts/ingest.py"
+    startCommand: "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: DEFAULT_PROVIDER
+        value: claude
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ANTHROPIC_MODEL
+        value: nex-agi/nex-n2.5-mini:free
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: deepseek/deepseek-v4-flash-0731:free
+      - key: SIMILARITY_THRESHOLD
+        value: "0.20"
+      - key: SQLITE_FALLBACK_URL
+        value: sqlite+aiosqlite:///./lenny_assistant.db
+
+  # ----------------------------------------------------------------------------
+  # 2. React + Vite Frontend (Static Site)
+  # ----------------------------------------------------------------------------
+  - type: static
+    name: lenny-assistant-web
+    rootDir: frontend
+    plan: free
+    buildCommand: "npm install && npm run build"
+    staticPublishPath: dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: lenny-assistant-api
+          property: host

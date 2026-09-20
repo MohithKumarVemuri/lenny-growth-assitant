@@ -57,7 +57,10 @@ export interface HealthData {
   };
 }
 
-export const API_BASE = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8000/api';
+export const API_BASE = (import.meta as any).env?.VITE_API_URL || 
+  (typeof window !== 'undefined' && window.location.hostname === 'localhost' && window.location.port !== '8000' 
+    ? 'http://localhost:8000/api' 
+    : '/api');
 
 export async function fetchHealth(): Promise<HealthData> {
   const res = await fetch(`${API_BASE}/health`);

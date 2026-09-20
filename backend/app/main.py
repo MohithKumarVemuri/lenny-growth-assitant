@@ -54,11 +54,32 @@ app.include_router(health_router, prefix=settings.API_PREFIX)
 app.include_router(sessions_router, prefix=settings.API_PREFIX)
 app.include_router(chat_router, prefix=settings.API_PREFIX)
 
-@app.get("/")
-async def root():
-    return {
-        "app": settings.APP_NAME,
-        "version": "1.0.0",
-        "docs_url": "/docs",
-        "health_check": f"{settings.API_PREFIX}/health"
-    }
+from pathlib import Path
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+
+FRONTEND_DIST = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
+if not FRONTEND_DIST.exists():
+    FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+if not FRONTEND_DIST.exists():
+    FRONTEND_DIST = Path("frontend/dist")
+
+if FRONTEND_DIST.exists() and (FRONTEND_DIST / "index.html").exists():
+    if (FRONTEND_DIST / "assets").exists():
+        app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIST / "assets")), name="assets")
+
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        file_path = FRONTEND_DIST / full_path
+        if file_path.is_file():
+            return FileResponse(str(file_path))
+        return FileResponse(str(FRONTEND_DIST / "index.html"))
+else:
+    @app.get("/")
+    async def root():
+        return {
+            "app": settings.APP_NAME,
+            "version": "1.0.0",
+            "docs_url": "/docs",
+            "health_check": f"{settings.API_PREFIX}/health"
+        }
