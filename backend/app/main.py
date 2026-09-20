@@ -21,6 +21,25 @@ async def lifespan(app: FastAPI):
     logger.info("Booting up The Lenny Growth Assistant API...")
     await init_db()
     logger.info("Database initialized and ready.")
+    
+    # Auto-seed transcripts if database is empty (e.g. serverless cold start)
+    try:
+        from app.database import get_session_factory
+        from app.models.db_models import TranscriptChunk
+        from sqlalchemy import select, func
+        session_factory = get_session_factory()
+        if session_factory:
+            async with session_factory() as session:
+                count_res = await session.execute(select(func.count(TranscriptChunk.id)))
+                count = count_res.scalar()
+                if count == 0:
+                    logger.info("No transcript chunks found in DB. Auto-seeding transcripts...")
+                    from scripts.ingest import ingest_transcripts
+                    await ingest_transcripts()
+                    logger.info("Auto-seeding complete.")
+    except Exception as e:
+        logger.warning(f"Auto-seed check/execution skipped or failed: {e}")
+
     yield
     logger.info("Shutting down The Lenny Growth Assistant API...")
 

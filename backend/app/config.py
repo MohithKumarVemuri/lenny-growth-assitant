@@ -19,7 +19,8 @@ class Settings(BaseSettings):
         "DATABASE_URL", 
         "postgresql+asyncpg://postgres:password123@localhost:5432/lenny_assistant"
     )
-    SQLITE_FALLBACK_URL: str = "sqlite+aiosqlite:///./lenny_assistant.db"
+    _db_path: str = "/tmp/lenny_assistant.db" if (os.getenv("VERCEL") or (os.name != "nt" and os.path.exists("/tmp"))) else "./lenny_assistant.db"
+    SQLITE_FALLBACK_URL: str = os.getenv("SQLITE_FALLBACK_URL", f"sqlite+aiosqlite:///{_db_path}")
 
     # LLM Providers
     DEFAULT_PROVIDER: str = os.getenv("DEFAULT_PROVIDER", "ollama")
